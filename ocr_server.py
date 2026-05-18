@@ -265,60 +265,119 @@ OCR TEXT:
 
     def create_solar_estimate(monthly_bill, kwh_usage, effective_rate_per_kwh, solar_data):
         """
-        Creates a simple MVP solar estimate.
+        Creates the Sunspark MVP solar estimate.
 
         Formula:
-        recommended_system_size_kwp = monthly kWh usage / monthly production per 1 kWp
-
-        monthly production per 1 kWp = pvout_daily × 30
+        monthlyProductionPerKwp = pvOutputDaily * 30
+        targetOffsetPercent = 0.70
+        targetKwhOffset = monthlyKwhUsage * targetOffsetPercent
+        recommendedSystemSizeKwp = targetKwhOffset / monthlyProductionPerKwp
+        estimatedMonthlySolarKwh = recommendedSystemSizeKwp * monthlyProductionPerKwp
+        estimatedMonthlySavings = estimatedMonthlySolarKwh * effectiveRatePerKwh
+        estimatedAnnualSavings = estimatedMonthlySavings * 12
+        estimatedNewBill = monthlyBill - estimatedMonthlySavings
+        estimatedInstallCost = recommendedSystemSizeKwp * costPerKwp
+        paybackYears = estimatedInstallCost / estimatedAnnualSavings
+        monthlyCo2ReductionKg = estimatedMonthlySolarKwh * gridEmissionFactor
+        annualCo2ReductionTons = (monthlyCo2ReductionKg * 12) / 1000
         """
-        pvout_daily = solar_data.get("pvout_daily")
 
-        if kwh_usage is None or pvout_daily is None or pvout_daily <= 0:
+        pv_output_daily = solar_data.get("pvout_daily")
+
+        target_offset_percent = 0.70
+
+        # MVP assumption.
+        # You can adjust this later based on real PH solar developer pricing.
+        cost_per_kwp = 60000
+
+        # Approximate Philippines grid emission factor.
+        # Unit: kg CO2 per kWh.
+        # You can refine this later using official DOE/Grid data.
+        grid_emission_factor = 0.70
+
+        if (
+            monthly_bill is None
+            or kwh_usage is None
+            or effective_rate_per_kwh is None
+            or pv_output_daily is None
+            or kwh_usage <= 0
+            or effective_rate_per_kwh <= 0
+            or pv_output_daily <= 0
+        ):
             return {
+                "target_offset_percent": target_offset_percent,
+                "monthly_production_per_kwp": None,
+                "target_kwh_offset": None,
                 "recommended_system_size_kwp": None,
+                "estimated_monthly_solar_kwh": None,
                 "estimated_monthly_production_kwh": None,
                 "estimated_monthly_savings": None,
                 "estimated_annual_savings": None,
+                "estimated_new_bill": None,
+                "estimated_install_cost": None,
+                "cost_per_kwp": cost_per_kwp,
+                "payback_years": None,
+                "grid_emission_factor": grid_emission_factor,
+                "monthly_co2_reduction_kg": None,
+                "annual_co2_reduction_tons": None,
                 "coverage_percentage": None,
             }
 
-        recommended_system_size_kwp = kwh_usage / (pvout_daily * 30)
+        monthly_production_per_kwp = pv_output_daily * 30
 
-        estimated_monthly_production_kwh = (
-            recommended_system_size_kwp * pvout_daily * 30
+        target_kwh_offset = kwh_usage * target_offset_percent
+
+        recommended_system_size_kwp = target_kwh_offset / monthly_production_per_kwp
+
+        estimated_monthly_solar_kwh = (
+            recommended_system_size_kwp * monthly_production_per_kwp
         )
 
-        if effective_rate_per_kwh is not None:
-            estimated_monthly_savings = (
-                estimated_monthly_production_kwh * effective_rate_per_kwh
-            )
-        else:
-            estimated_monthly_savings = monthly_bill
+        estimated_monthly_savings = (
+            estimated_monthly_solar_kwh * effective_rate_per_kwh
+        )
 
-        estimated_monthly_savings = round(estimated_monthly_savings, 2)
+        estimated_annual_savings = estimated_monthly_savings * 12
 
-        estimated_annual_savings = (
-            estimated_monthly_savings * 12
-            if estimated_monthly_savings is not None
+        estimated_new_bill = monthly_bill - estimated_monthly_savings
+
+        estimated_install_cost = recommended_system_size_kwp * cost_per_kwp
+
+        payback_years = (
+            estimated_install_cost / estimated_annual_savings
+            if estimated_annual_savings > 0
             else None
         )
 
-        coverage_percentage = (
-            estimated_monthly_production_kwh / kwh_usage
-        ) * 100
+        monthly_co2_reduction_kg = (
+            estimated_monthly_solar_kwh * grid_emission_factor
+        )
+
+        annual_co2_reduction_tons = (
+            monthly_co2_reduction_kg * 12
+        ) / 1000
+
+        coverage_percentage = target_offset_percent * 100
 
         return {
+            "target_offset_percent": round(target_offset_percent, 2),
+            "monthly_production_per_kwp": round(monthly_production_per_kwp, 2),
+            "target_kwh_offset": round(target_kwh_offset, 2),
             "recommended_system_size_kwp": round(recommended_system_size_kwp, 2),
-            "estimated_monthly_production_kwh": round(
-                estimated_monthly_production_kwh, 2
-            ),
-            "estimated_monthly_savings": round(estimated_monthly_savings, 2)
-            if estimated_monthly_savings is not None
-            else None,
-            "estimated_annual_savings": round(estimated_annual_savings, 2)
-            if estimated_annual_savings is not None
-            else None,
+            "estimated_monthly_solar_kwh": round(estimated_monthly_solar_kwh, 2),
+
+            # Kept for frontend compatibility with your current app.
+            "estimated_monthly_production_kwh": round(estimated_monthly_solar_kwh, 2),
+
+            "estimated_monthly_savings": round(estimated_monthly_savings, 2),
+            "estimated_annual_savings": round(estimated_annual_savings, 2),
+            "estimated_new_bill": round(estimated_new_bill, 2),
+            "estimated_install_cost": round(estimated_install_cost, 2),
+            "cost_per_kwp": cost_per_kwp,
+            "payback_years": round(payback_years, 1) if payback_years is not None else None,
+            "grid_emission_factor": grid_emission_factor,
+            "monthly_co2_reduction_kg": round(monthly_co2_reduction_kg, 2),
+            "annual_co2_reduction_tons": round(annual_co2_reduction_tons, 2),
             "coverage_percentage": round(coverage_percentage, 2),
         }
 

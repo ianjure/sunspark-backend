@@ -188,6 +188,68 @@ OCR TEXT:
                     return clean_number(value.get(possible_key))
 
         return clean_number(value)
+
+    def get_location_name_from_nominatim(lat: float, lon: float):
+        """
+        Reverse geocodes latitude and longitude using OpenStreetMap Nominatim.
+
+        We use zoom=13 because it usually returns village/suburb-level data,
+        which is useful for barangay-level location in the Philippines.
+        """
+        url = "https://nominatim.openstreetmap.org/reverse"
+
+        response = requests.get(
+            url,
+            params={
+                "format": "jsonv2",
+                "lat": lat,
+                "lon": lon,
+                "zoom": 13,
+                "addressdetails": 1,
+            },
+            timeout=20,
+            headers={
+                # Use an identifying user agent, not the default python-requests one.
+                # Replace the email with your preferred project/contact email.
+                "User-Agent": "Sunspark/0.1 (ianjure.data@gmail.com)",
+                "Accept": "application/json",
+            },
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+        address = data.get("address", {})
+
+        # Barangay-level value can appear under different OSM keys.
+        barangay = (
+            address.get("village")
+            or address.get("suburb")
+            or address.get("neighbourhood")
+            or address.get("quarter")
+            or address.get("hamlet")
+        )
+
+        # City/municipality can also vary by area.
+        city_or_municipality = (
+            address.get("city")
+            or address.get("town")
+            or address.get("municipality")
+            or address.get("city_district")
+            or address.get("county")
+        )
+
+        province = (
+            address.get("state")
+            or address.get("province")
+            or address.get("region")
+        )
+
+        return {
+            "barangay": barangay,
+            "city_or_municipality": city_or_municipality,
+            "province": province,
+        }
     
     def get_global_solar_atlas_data(lat: float, lon: float):
         """
@@ -406,6 +468,22 @@ OCR TEXT:
                 "success": False,
                 "error": str(e),
             }
+        
+    @web_app.get("/reverse-geocode")
+    async def reverse_geocode(lat: float, lon: float):
+        try:
+            location_data = get_location_name_from_nominatim(lat, lon)
+
+            return {
+                "success": True,
+                "location": location_data,
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+            }
 
     @web_app.get("/solar-data")
     async def solar_data(lat: float, lon: float):
@@ -442,6 +520,7 @@ OCR TEXT:
 
             extracted_bill_data = extract_bill_fields_with_llm(ocr_text)
             solar_data = get_global_solar_atlas_data(lat, lon)
+            location_data = get_location_name_from_nominatim(lat, lon)
 
             estimate = create_solar_estimate(
                 monthly_bill=extracted_bill_data.get("monthly_bill"),
@@ -453,6 +532,7 @@ OCR TEXT:
             return {
                 "success": True,
                 **extracted_bill_data,
+                "location": location_data,
                 "solar": solar_data,
                 "estimate": estimate,
             }

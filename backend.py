@@ -30,6 +30,7 @@ def SunsparkBackend():
     import pytesseract
     import io
     import json
+    import math
     import os
     import re
     import requests
@@ -63,6 +64,10 @@ def SunsparkBackend():
     def safe_round(value, decimals):
         """Returns rounded value, or None if value is None."""
         return round(value, decimals) if value is not None else None
+
+    def ceil_to_increment(value, increment):
+        """Rounds value up to the next increment, or None if value is None."""
+        return math.ceil(value / increment) * increment if value is not None else None
 
     def get_nested(data, *keys):
         """Safely traverses nested dicts. Returns None if any key is missing."""
@@ -298,15 +303,15 @@ OCR TEXT:
             "target_offset_percent": round(TARGET_OFFSET, 2),
             "monthly_production_per_kwp": round(monthly_prod_per_kwp, 2),
             "target_kwh_offset": round(target_kwh_offset, 2),
-            "recommended_system_size_kwp": round(system_size_kwp, 2),
+            "recommended_system_size_kwp": ceil_to_increment(system_size_kwp, 0.5),
             "estimated_monthly_solar_kwh": round(monthly_solar_kwh, 2),
             "estimated_monthly_production_kwh": round(monthly_solar_kwh, 2),
-            "estimated_monthly_savings": round(monthly_savings, 2),
+            "estimated_monthly_savings": ceil_to_increment(monthly_savings, 100),
             "estimated_annual_savings": round(annual_savings, 2),
             "estimated_new_bill": round(monthly_bill - monthly_savings, 2),
-            "estimated_install_cost": round(install_cost, 2),
+            "estimated_install_cost": ceil_to_increment(install_cost, 100_000),
             "cost_per_kwp": COST_PER_KWP,
-            "payback_years": safe_round(install_cost / annual_savings, 1) if annual_savings > 0 else None,
+            "payback_years": math.ceil(install_cost / annual_savings) if annual_savings > 0 else None,
             "grid_emission_factor": GRID_EMISSION,
             "monthly_co2_reduction_kg": round(monthly_co2_kg, 2),
             "annual_co2_reduction_tons": round((monthly_co2_kg * 12) / 1000, 2),
